@@ -58,6 +58,9 @@ class WidgetWorker(multiprocessing.Process):
     def send_output_to_queue(self, output):
         self.output_queue.put((self.name, self.label, output))
 
+    def send_input(self, input):
+        pass
+
     @classmethod
     def get_all_subclasses(cls):
         all_subclasses = []
@@ -82,6 +85,7 @@ class FortuneWorker(WidgetWorker):
         self.output_queue = output_queue
         self.fortune_file = fortune_file
         self.label = label
+        self.input_queue = multiprocessing.JoinableQueue()
 
     @classmethod
     def InstanceFromConfigSection(cls, configsection, output_queue):
@@ -99,18 +103,26 @@ class FortuneWorker(WidgetWorker):
     def run(self):
         max_width, max_height = self.interior_space()
         f = fortune_cookie_loader.fortune_cookie_loader(self.fortune_file, max_width=max_width, max_height=max_height)
+        self.send_new_cookie(f)
+        while True:
+            event = self.input_queue.get()
+            self.send_new_cookie(f)
+
+    def send_input(self, input):
+        self.input_queue.put(input)
+
+    def send_new_cookie(self, f):
         cookie = f.return_fortune_cookie()
         logger.info(cookie)
         output = []
-
+        regular_text = True
         for y, line in enumerate(cookie):
             output_line = ["addstr", y, 0, line]
             if line.startswith("--"):
-                #output_line.append(curses.color_pair(9))
+                regular_text = False
+
+            if not regular_text:
                 output_line.append(curses_constants.A_DIM)
-            else:
-                #output_line.append(curses.color_pair(8))
-                pass
 
             output.append(output_line)
         logger.info(output)

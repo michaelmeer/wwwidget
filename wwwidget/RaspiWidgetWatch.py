@@ -56,7 +56,7 @@ class RaspiWidgetWatchController(object):
         for section in self.config.sections():
             if WidgetWorker.is_config_section_valid_widget_worker(self.config[section]):
                 widget_worker = WidgetWorker.instantiate_widget_from_configsection(self.config[section], output_queue)
-                self.widget_workers[widget_worker.name] = widget_worker.get_windows()
+                self.widget_workers[widget_worker.name] = widget_worker
                 if widget_worker:
                     jobs.append(widget_worker)
                     widget_worker.start()
@@ -72,14 +72,15 @@ class RaspiWidgetWatchController(object):
                 id, x, y, z, bstate = curses.getmouse()
                 logger.info("mouse event: id {}, x {}, y {}, z {}, bstate {}".format(id, x, y, z, bstate))
 
-                for widget_name, windows in self.widget_workers.items():
-                    logger.info("{}: {}".format(widget_name, windows[0].enclose(y, x)))
-
+                for widget_name, widget in self.widget_workers.items():
+                    logger.info("{}: {}".format(widget_name, widget.get_windows()[0].enclose(y, x)))
+                    widget.send_input(1)
 
             if not output_queue.empty():
                 widget_name, widget_label, widget_output = output_queue.get_nowait()
 
-                border_win, win = self.widget_workers[widget_name]
+                widget = self.widget_workers[widget_name]
+                border_win, win = widget.get_windows()
                 win.clear()
 
                 border_win.border()
@@ -89,7 +90,6 @@ class RaspiWidgetWatchController(object):
                 logger.debug("Received output from {}, {} lines".format(widget_name, len(widget_output)))
                 logger.debug(widget_output)
 
-                # for y, line in enumerate(widget_output):
                 for y, output in enumerate(widget_output):
                     try:
                         action = output[0]
@@ -100,8 +100,7 @@ class RaspiWidgetWatchController(object):
                         elif action == 'bkgd':
                             #widget.win.bkgd(*parameters)
                             win.bkgd(*parameters)
-                        # widget.win.addstr(y,0,str(output)[:75])
-                        # win.addstr(y,2,line,curses.color_pair(9))
+
                     except Exception as e:
                         # logger.warning("Error from widget {} printing line (length {}): {}".format(widget_name, len(line), line))
                         logger.warning(e)
